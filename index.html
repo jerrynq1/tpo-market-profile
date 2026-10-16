@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TPO Live</title>
+<style>
+:root{--bg:#eceff2;--panel:#fff;--ink:#16212b;--mute:#667583;--line:#d5dbe1;--buy:#0d7a6b;--sell:#b3362e;--warn:#a86a10;--acc:#1d3b57;--va:#e3edf6;--poc:#ffe9a8}
+@media(prefers-color-scheme:dark){:root{--bg:#10161c;--panel:#18212a;--ink:#e6ecf1;--mute:#8d9ba8;--line:#2b3742;--buy:#35c2ae;--sell:#f0766d;--warn:#e0a443;--acc:#8fb8dd;--va:#1f3345;--poc:#5a4a14}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+h1{font-size:17px;margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#st{font-size:12px;font-weight:400;color:var(--mute)}
+#st i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:5px}
+#st.ok i{background:var(--buy)}#st.bad i{background:var(--sell)}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+input,select,button{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:0}
+button{cursor:pointer}button.on{background:var(--acc);color:var(--panel);border-color:var(--acc)}
+#sym{width:84px}#tick{width:64px}#days{flex:1;min-width:130px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px}
+.k{border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.k span{display:block;font-size:11px;color:var(--mute)}.k b{font-size:15px}
+.tags{margin-top:6px;font-size:12px;color:var(--warn)}
+#prof{max-height:68vh;overflow:auto;font:13px/16px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px}
+.r{display:flex;white-space:nowrap;padding:0 6px;min-width:max-content}
+.r .p{width:64px;flex:none;color:var(--mute);font-weight:400}
+.r .l{letter-spacing:1px;padding-right:10px}
+.r .n{color:var(--mute);font-style:normal;font-size:11px}
+.r.va{background:var(--va)}
+.r.poc{background:var(--poc);font-weight:700}
+.r.sp .l{color:var(--warn)}
+.r.cur{box-shadow:inset 3px 0 0 var(--sell)}
+.r.cur .p{color:var(--sell);font-weight:700}
+.r u{text-decoration:none;color:var(--acc);font-weight:700}
+.r s{text-decoration:none;color:var(--buy);font-weight:700}
+.lg{font-size:12px;color:var(--mute);margin-top:6px}
+details summary{cursor:pointer;color:var(--mute);font-size:13px}
+details input{width:100%;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1><span>TPO <span id="ttl">XAUUSD</span></span><span id="st"><i></i><span id="stt">Chưa kết nối</span></span></h1>
+    <div class="bar">
+      <input id="sym" value="XAUUSD" aria-label="Mã"> 
+      <button id="prev" aria-label="Ngày trước">&larr;</button>
+      <select id="days" aria-label="Ngày"></select>
+      <button id="next" aria-label="Ngày sau">&rarr;</button>
+      <button id="live">Live</button>
+      <input id="tick" type="number" step="0.1" min="0.01" value="0.5" aria-label="Kích thước hàng giá">
+    </div>
+    <details id="cfgBox" style="margin-top:8px"><summary>Kết nối API</summary>
+      <input id="apiUrl" placeholder="https://signal-bridge.xxx.workers.dev">
+      <input id="token" type="password" placeholder="Secret token">
+      <button id="save" style="margin-top:6px">Lưu</button>
+    </details>
+  </div>
+  <div class="card"><div class="grid" id="stats"></div><div class="tags" id="tags"></div></div>
+  <div class="card">
+    <div id="prof"></div>
+    <div class="lg">Mỗi chữ = 30 phút giờ server MT5 (A = 00:00). Nền xanh = Value Area 70%, nền vàng = POC, chữ xanh dương = Initial Balance (A, B), chữ cam = single print, vạch đỏ = giá hiện tại.</div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const LET="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const rd=k=>{try{return JSON.parse(localStorage.getItem(k)||"{}")}catch(e){return{}}};
+let cfg=rd("sb_cfg"); // dùng chung với trang Signal Bridge nếu cùng domain
+let sym=localStorage.getItem("tpo_sym")||"XAUUSD", tick=Number(localStorage.getItem("tpo_tick"))||0.5;
+const bars=new Map(); // t -> [t,o,h,l,c,v] (nến đã đóng)
+let form=null, srv=0, lastPx=null, day=null, follow=true, recenter=true, formT=0, busy=false;
+
+// ---------- tính TPO (hàm thuần, dễ kiểm thử) ----------
+function tpo(all,d,tk){
+  const a=d*86400,b=a+86400, rows=new Map();
+  const src=all.filter(x=>x[0]>=a&&x[0]<b).sort((x,y)=>x[0]-y[0]);
+  if(!src.length)return null;
+  let h=-1e12,l=1e12,ibH=-1e12,ibL=1e12,pMax=0;
+  for(const x of src){
+    const p=Math.floor((x[0]-a)/1800); pMax=Math.max(pMax,p);
+    h=Math.max(h,x[2]); l=Math.min(l,x[3]);
+    if(p<2){ibH=Math.max(ibH,x[2]);ibL=Math.min(ibL,x[3])}
+    const r0=Math.floor(x[3]/tk+1e-9), r1=Math.floor(x[2]/tk+1e-9);
+    for(let r=r0;r<=r1;r++){let s=rows.get(r);if(!s){s=new Set();rows.set(r,s)}s.add(p)}
+  }
+  const lo=Math.min(...rows.keys()), hi=Math.max(...rows.keys()), n=hi-lo+1;
+  const per=[],cnt=[];
+  for(let i=0;i<n;i++){const s=rows.get(lo+i);per.push(s?[...s].sort((x,y)=>x-y):[]);cnt.push(per[i].length)}
+  const total=cnt.reduce((x,y)=>x+y,0), mid=(n-1)/2;
+  let poc=0;
+  for(let i=1;i<n;i++) if(cnt[i]>cnt[poc]||(cnt[i]===cnt[poc]&&Math.abs(i-mid)<Math.abs(poc-mid))) poc=i;
+  let vl=poc,vh=poc,sum=cnt[poc];const target=Math.ceil(total*0.7);
+  while(sum<target&&(vl>0||vh<n-1)){
+    const up=vh<n-1?cnt[vh+1]+(vh+2<n?cnt[vh+2]:0):-1;
+    const dn=vl>0?cnt[vl-1]+(vl-2>=0?cnt[vl-2]:0):-1;
+    if(up>=dn){const k=Math.min(2,n-1-vh);for(let j=1;j<=k;j++)sum+=cnt[vh+j];vh+=k}
+    else{const k=Math.min(2,vl);for(let j=1;j<=k;j++)sum+=cnt[vl-j];vl-=k}
+  }
+  return{lo,hi,n,per,cnt,poc,vl,vh,open:src[0][1],close:src[src.length-1][4],h,l,ibH:ibH>-1e11?ibH:null,ibL:ibL<1e11?ibL:null,pMax,poorH:cnt[n-1]>=2,poorL:cnt[0]>=2,
+    sp:cnt.reduce((x,c,i)=>x+(c===1&&i>0&&i<n-1?1:0),0)};
+}
+
+// ---------- hiển thị ----------
+const dec=()=>Number.isInteger(tick)?0:Math.min(4,(String(tick).split(".")[1]||"").length);
+const fx=(v,d=2)=>v==null?"–":Number(v).toFixed(d);
+const days=()=>[...new Set([...bars.keys(),...(form?[form[0]]:[])].map(t=>Math.floor(t/86400)))].sort((x,y)=>x-y);
+const dLabel=d=>{const s=new Date(d*864e5);return s.toISOString().slice(0,10)+" ("+["CN","T2","T3","T4","T5","T6","T7"][s.getUTCDay()]+")"};
+function fillDays(){
+  const ds=days().reverse();
+  $("days").innerHTML=ds.map(d=>`<option value="${d}">${dLabel(d)}</option>`).join("");
+  if(follow&&ds.length)day=ds[0];
+  if(day!=null)$("days").value=day;
+  $("live").classList.toggle("on",follow);
+}
+function draw(){
+  if(day==null){$("prof").innerHTML='<div class="r">Chưa có nến nào. Kiểm tra EA đã gửi nến M1 chưa.</div>';return}
+  const all=[...bars.values()].filter(x=>!form||x[0]!==form[0]); if(form)all.push(form);
+  const T=tpo(all,day,tick);
+  if(!T){$("prof").innerHTML='<div class="r">Ngày này không có dữ liệu.</div>';$("stats").innerHTML="";$("tags").textContent="";return}
+  const isLive=day===days().slice(-1)[0], px=isLive&&lastPx?lastPx:T.close, curRow=Math.floor(px/tick+1e-9)-T.lo, d=dec();
+  let out="";
+  for(let i=T.n-1;i>=0;i--){
+    const cls=["r"];
+    if(i===T.poc)cls.push("poc");else if(i>=T.vl&&i<=T.vh)cls.push("va");
+    if(T.cnt[i]===1&&i>0&&i<T.n-1)cls.push("sp");
+    if(i===curRow)cls.push("cur");
+    const ls=T.per[i].map(p=>{const c=LET[p]||"?";return p===T.pMax&&isLive?`<s>${c}</s>`:p<2?`<u>${c}</u>`:c}).join("");
+    out+=`<div class="${cls.join(" ")}"><b class="p">${fx((T.lo+i)*tick,d)}</b><span class="l">${ls}</span><i class="n">${T.cnt[i]}</i></div>`;
+  }
+  const box=$("prof"), keep=box.scrollTop; box.innerHTML=out;
+  box.scrollTop=keep;
+  if(recenter){const el=box.querySelector(".cur,.poc");if(el)box.scrollTop=el.offsetTop-box.clientHeight/2;recenter=false}
+  const K=(k,v)=>`<div class="k"><span>${k}</span><b>${v}</b></div>`;
+  $("stats").innerHTML=K("Open",fx(T.open))+K("High",fx(T.h))+K("Low",fx(T.l))+K(isLive?"Giá":"Close",fx(px))+
+    K("POC",fx((T.lo+T.poc)*tick))+K("VAH",fx((T.lo+T.vh)*tick))+K("VAL",fx((T.lo+T.vl)*tick))+
+    K("IB High",fx(T.ibH))+K("IB Low",fx(T.ibL))+K("Biên độ",fx(T.h-T.l));
+  const tg=[];if(T.poorH)tg.push("Poor High");if(T.poorL)tg.push("Poor Low");if(T.sp)tg.push(T.sp+" hàng single print");
+  $("tags").textContent=tg.join(" · ");
+}
+
+// ---------- dữ liệu ----------
+function status(ok,msg){$("st").className=ok?"ok":"bad";$("stt").textContent=msg}
+async function api(p){
+  const r=await fetch(cfg.apiUrl+p,{headers:{"X-Token":cfg.token}});
+  if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
+}
+async function loadBars(){
+  const now=srv||Math.floor(Date.now()/1000), since=(Math.floor(now/86400)-4)*86400; // 5 ngày gần nhất
+  const d=await api(`/api/bars?symbol=${encodeURIComponent(sym)}&since=${since}`);
+  for(const b of d.bars)bars.set(b[0],b);
+  fillDays();draw();
+}
+async function tickLoop(){
+  if(!cfg.apiUrl||!cfg.token||document.hidden||busy)return;
+  busy=true;
+  try{
+    const q=await api("/api/quote");
+    if(q.serverTime)srv=q.serverTime;
+    const qq=(q.quotes||[]).find(x=>x.symbol===sym);lastPx=qq?Number(qq.bid):lastPx;
+    form=q.bar&&q.bar.symbol===sym?q.bar.b:null;
+    if(form&&form[0]!==formT){const first=!formT;formT=form[0];setTimeout(()=>loadBars().catch(()=>{}),first?0:3000)} // nến cũ vừa đóng: nạp lại
+    const age=q.receivedAt?Math.round((Date.now()-q.receivedAt)/1000):null;
+    if(age!=null&&age>20)status(false,"Không có dữ liệu mới ("+age+"s)");else status(true,"Live");
+    fillDays();draw();
+  }catch(e){status(false,"Lỗi: "+e.message)}
+  busy=false;
+}
+async function start(){
+  bars.clear();form=null;formT=0;lastPx=null;recenter=true;
+  if(!cfg.apiUrl||!cfg.token){$("cfgBox").open=true;status(false,"Cần nhập API URL và token");return}
+  try{await tickLoop();await loadBars()}catch(e){status(false,"Lỗi: "+e.message)}
+}
+
+// ---------- sự kiện ----------
+$("sym").value=sym;$("tick").value=tick;$("ttl").textContent=sym;
+$("apiUrl").value=cfg.apiUrl||"";$("token").value=cfg.token||"";
+$("save").onclick=()=>{
+  cfg.apiUrl=$("apiUrl").value.trim().replace(/\/$/,"");cfg.token=$("token").value.trim();
+  try{localStorage.setItem("sb_cfg",JSON.stringify(Object.assign(rd("sb_cfg"),{apiUrl:cfg.apiUrl,token:cfg.token})))}catch(e){}
+  $("cfgBox").open=false;start();
+};
+$("sym").onchange=()=>{sym=$("sym").value.trim()||"XAUUSD";localStorage.setItem("tpo_sym",sym);$("ttl").textContent=sym;start()};
+$("tick").onchange=()=>{const v=Number($("tick").value);if(v>0){tick=v;localStorage.setItem("tpo_tick",v);recenter=true;draw()}};
+$("days").onchange=()=>{day=Number($("days").value);follow=day===days().slice(-1)[0];recenter=true;fillDays();draw()};
+const step=s=>{const ds=days(),i=ds.indexOf(day)+s;if(i>=0&&i<ds.length){day=ds[i];follow=i===ds.length-1;recenter=true;fillDays();draw()}};
+$("prev").onclick=()=>step(-1);$("next").onclick=()=>step(1);
+$("live").onclick=()=>{follow=true;recenter=true;fillDays();draw()};
+setInterval(tickLoop,1000);
+setInterval(()=>{if(cfg.apiUrl&&!document.hidden)loadBars().catch(()=>{})},60000);
+start();
+</script>
+</body>
+</html>
