@@ -20,7 +20,7 @@ input,button{font:inherit;padding:5px 10px;border:1px solid var(--line);border-r
 button{cursor:pointer}button.on{background:var(--acc);color:var(--panel);border-color:var(--acc)}
 #sym{width:96px}#tick{width:64px}
 #info{padding:6px 10px;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--line);min-height:30px}
-#cv{height:74vh;min-height:420px;position:relative}
+#cv{height:74vh;min-height:420px;position:relative;background:#1e1e1e}
 canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
 .lg{font-size:12px;color:var(--mute);padding:6px 10px}
 details summary{cursor:pointer;color:var(--mute);font-size:13px}
@@ -42,7 +42,7 @@ details input{width:100%;margin-top:6px}
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div id="info"></div><div id="cv"><canvas id="c"></canvas></div>
-    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, nhấp đúp để về Live. Nền xanh = Value Area 70%, vàng = POC, chữ xanh dương = IB (A, B), cam = single print, đường đỏ = giá hiện tại. Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
+    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
   </div>
 </div>
 <script>
@@ -58,32 +58,30 @@ const AX=58,BH=22,GAP=3,MX=24;
 const cv=$("c"),ctx=cv.getContext("2d");let W=0,H=0;
 
 function tpo(all,d,tk){
-  const a=d*86400,b=a+86400, rows=new Map();
-  const src=all.filter(x=>x[0]>=a&&x[0]<b).sort((x,y)=>x[0]-y[0]);
+  // Theo bản C#: làm tròn giá về tick gần nhất, mỗi nến phủ [round(low), round(high)], volume chia đều cho mọi tick
+  const a=d*86400,src=all.filter(x=>x[0]>=a&&x[0]<a+86400).sort((x,y)=>x[0]-y[0]);
   if(!src.length)return null;
-  let h=-1e12,l=1e12,ibH=-1e12,ibL=1e12,pMax=0;
+  const rows=new Map(),vm=new Map();let h=-1e12,l=1e12;
   for(const x of src){
-    const p=Math.floor((x[0]-a)/1800); pMax=Math.max(pMax,p);
-    h=Math.max(h,x[2]); l=Math.min(l,x[3]);
-    if(p<2){ibH=Math.max(ibH,x[2]);ibL=Math.min(ibL,x[3])}
-    const r0=Math.floor(x[3]/tk+1e-9), r1=Math.floor(x[2]/tk+1e-9);
-    for(let r=r0;r<=r1;r++){let s=rows.get(r);if(!s){s=new Set();rows.set(r,s)}s.add(p)}
+    const p=Math.floor((x[0]-a)/1800);h=Math.max(h,x[2]);l=Math.min(l,x[3]);
+    const r0=Math.round(x[3]/tk),r1=Math.round(x[2]/tk),vt=(x[5]||0)/(r1-r0+1);
+    for(let r=r0;r<=r1;r++){let s=rows.get(r);if(!s){s=new Set();rows.set(r,s)}s.add(p);vm.set(r,(vm.get(r)||0)+vt)}
   }
-  const lo=Math.min(...rows.keys()), hi=Math.max(...rows.keys()), n=hi-lo+1;
-  const per=[],cnt=[];
-  for(let i=0;i<n;i++){const s=rows.get(lo+i);per.push(s?[...s].sort((x,y)=>x-y):[]);cnt.push(per[i].length)}
-  const total=cnt.reduce((x,y)=>x+y,0), mid=(n-1)/2;
-  let poc=0;
-  for(let i=1;i<n;i++) if(cnt[i]>cnt[poc]||(cnt[i]===cnt[poc]&&Math.abs(i-mid)<Math.abs(poc-mid))) poc=i;
-  let vl=poc,vh=poc,sum=cnt[poc];const target=Math.ceil(total*0.7);
-  while(sum<target&&(vl>0||vh<n-1)){
-    const up=vh<n-1?cnt[vh+1]+(vh+2<n?cnt[vh+2]:0):-1;
-    const dn=vl>0?cnt[vl-1]+(vl-2>=0?cnt[vl-2]:0):-1;
-    if(up>=dn){const k=Math.min(2,n-1-vh);for(let j=1;j<=k;j++)sum+=cnt[vh+j];vh+=k}
-    else{const k=Math.min(2,vl);for(let j=1;j<=k;j++)sum+=cnt[vl-j];vl-=k}
-  }
-  return{lo,hi,n,per,cnt,poc,vl,vh,open:src[0][1],close:src[src.length-1][4],h,l,ibH:ibH>-1e11?ibH:null,ibL:ibL<1e11?ibL:null,pMax,poorH:cnt[n-1]>=2,poorL:cnt[0]>=2,
-    sp:cnt.reduce((x,c,i)=>x+(c===1&&i>0&&i<n-1?1:0),0)};
+  const lo=Math.min(...rows.keys()),hi=Math.max(...rows.keys()),n=hi-lo+1,mid=(n-1)/2;
+  const per=[],cnt=[],vol=[];
+  for(let i=0;i<n;i++){const s=rows.get(lo+i);per.push(s?[...s].sort((x,y)=>x-y):[]);cnt.push(per[i].length);vol.push(vm.get(lo+i)||0)}
+  const pick=c=>{let b=0;for(let i=1;i<n;i++)if(c[i]>c[b]||(c[i]===c[b]&&Math.abs(i-mid)<Math.abs(b-mid)))b=i;return b};
+  const va=(c,p,tg)=>{ // mở rộng từng hàng một: lấy hàng kề trên/dưới lớn hơn (bằng nhau thì lấy hàng trên)
+    let t=p+1,b=p-1,sum=c[p];
+    while(sum<tg&&(t<n||b>=0)){const tc=t<n?c[t]:-1,bc=b>=0?c[b]:-1;
+      if(tc>=bc&&tc>=0){sum+=tc;t++}else if(bc>=0){sum+=bc;b--}else break}
+    return[b+1,t-1]};
+  const poc=pick(cnt),[vl,vh]=va(cnt,poc,Math.ceil(cnt.reduce((x,y)=>x+y,0)*.7));
+  const vpoc=pick(vol),[vvl,vvh]=va(vol,vpoc,vol.reduce((x,y)=>x+y,0)*.7);
+  const vsp=vol.map((v,i)=>v>0&&i!==vpoc&&!(i+1<n&&vol[i+1]>0)&&!(i>0&&vol[i-1]>0));
+  const oR=Math.round(src[0][1]/tk)-lo,cR=Math.round(src[src.length-1][4]/tk)-lo;
+  let mc=1;for(let i=0;i<n;i++)mc=Math.max(mc,cnt[i]+(i===oR?7:0)+(i===cR?8:0));
+  return{lo,n,per,cnt,vol,poc,vl,vh,vpoc,vvl,vvh,vsp,oR,cR,tU:Math.max(5,mc),h,l,open:src[0][1],close:src[src.length-1][4]};
 }
 
 
@@ -106,58 +104,78 @@ function prof(d){
   if(!c||c.sig!==sig){const a=[...m.values()].filter(x=>!fd||x[0]!==form[0]);if(fd)a.push(form);c={sig,T:tpo(a,d,tick)};cache.set(d,c)}
   return c.T;
 }
-function layout(){const L=[];let u=0;for(const d of dayList()){const T=prof(d);if(!T)continue;const w=Math.max(...T.cnt)+GAP;L.push({d,T,u,w});u+=w}return{L,total:u}}
+const VPU=8;
+function layout(){const L=[];let u=0;for(const d of dayList()){const T=prof(d);if(!T)continue;const w=T.tU+1+VPU+GAP;L.push({d,T,u,w});u+=w}return{L,total:u}}
 
-// ---------- vẽ ----------
+// ---------- vẽ (màu và bố cục theo bản C#: nền tối, VA cam, POC đỏ, single print cyan) ----------
+const MONO="Consolas,ui-monospace,Menlo,monospace";let ratio=.6;
+const fv=v=>v>=1e6?(v/1e6).toFixed(2)+"M":v>=1e3?(v/1e3).toFixed(1)+"K":Math.round(v)+"";
+const fm=v=>v===Math.floor(v)?v.toFixed(0):v.toFixed(2);
 function draw(){
   if(!W)return;
-  const css=getComputedStyle(document.documentElement),g=k=>css.getPropertyValue(k).trim();
-  const {L,total}=layout(),PW=W-AX;
-  ctx.clearRect(0,0,W,H+BH);
-  if(!L.length){ctx.fillStyle=g("--mute");ctx.font="13px system-ui";ctx.fillText("Chưa có nến nào.",12,24);return}
+  const {L,total}=layout(),PW=W-AX,dc=dec();
+  ctx.fillStyle="#1e1e1e";ctx.fillRect(0,0,W,H+BH);ctx.fillStyle="#252525";ctx.fillRect(PW,0,AX,H+BH);ctx.fillRect(0,H,W,BH);
+  ctx.textBaseline="middle";
+  if(!L.length){ctx.fillStyle="#888";ctx.font="13px system-ui";ctx.textAlign="left";ctx.fillText("Chưa có nến nào.",12,24);$("info").textContent="";return}
   const last=L[L.length-1];
   if(cp==null)cp=lastPx||(last.T.lo+last.T.poc)*tick;
   if(follow)sx=(last.u+last.w-GAP)*cw+MX-PW;
   sx=Math.max(-PW*.6,Math.min(sx,total*cw-PW*.4));
   if(sx<PW*.3&&!noMore&&!loadingOld)loadOlder();
-  const Y=p=>H/2-(p-cp)/tick*rh, dc=dec();
-  ctx.textBaseline="middle";ctx.font="11px system-ui";ctx.textAlign="left";
+  const Y=p=>H/2-(p-cp)/tick*rh;
+  ctx.font="100px "+MONO;ratio=ctx.measureText("M").width/100||.6;
   let step=1;const need=Math.ceil(34/rh);for(const s of [1,2,4,5,10,20,50,100,200,500]){step=s;if(s>=need)break}
   const rTop=Math.floor(cp/tick+H/2/rh)+1,rBot=Math.floor(cp/tick-H/2/rh)-1;
+  ctx.font="11px system-ui";ctx.textAlign="left";
   for(let r=Math.ceil(rBot/step)*step;r<=rTop;r+=step){
-    const y=Y(r*tick);ctx.globalAlpha=.5;ctx.strokeStyle=g("--line");ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(PW,y);ctx.stroke();
-    ctx.globalAlpha=1;ctx.fillStyle=g("--mute");ctx.fillText(fx(r*tick,dc),PW+4,y);
+    const y=Y(r*tick);ctx.strokeStyle="#2f2f2f";ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(PW,y);ctx.stroke();
+    ctx.fillStyle="#888";ctx.fillText(fx(r*tick,dc),PW+4,y);
   }
-  const cInk=g("--ink"),cAcc=g("--acc"),cBuy=g("--buy"),cWarn=g("--warn"),cVa=g("--va"),cPoc=g("--poc"),cLine=g("--line"),cSell=g("--sell");
-  const txt=rh>=9&&cw>=6, fs=Math.floor(Math.min(rh-1,cw/.62));
+  const fs=Math.min(cw/ratio,rh+1),txt=fs>=6;
+  const dash=(y,xa,xb,c)=>{ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(xa,y);ctx.lineTo(xb,y);ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1};
   let focus=null;const mid=sx+PW/2;
   ctx.save();ctx.beginPath();ctx.rect(0,0,PW,H);ctx.clip();
-  ctx.font=fs+"px ui-monospace,Menlo,Consolas,monospace";ctx.textAlign="center";
   for(const e of L){
-    const x0=e.u*cw-sx,x1=(e.u+e.w)*cw-sx,T=e.T;
+    const T=e.T,x0=e.u*cw-sx,tW=e.tU*cw,vL=x0+tW+cw,vW=VPU*cw,xr=vL+vW;
     if(mid>=e.u*cw&&mid<(e.u+e.w)*cw)focus=e;
-    if(x1<0||x0>PW)continue;
-    ctx.strokeStyle=cLine;ctx.beginPath();ctx.moveTo(x1-GAP*cw/2,0);ctx.lineTo(x1-GAP*cw/2,H);ctx.stroke();
+    if(xr<0||x0>PW)continue;
+    const yTop=Y((T.lo+T.n-1)*tick)-rh/2,yBot=Y(T.lo*tick)+rh/2,mx=Math.max(...T.vol);
+    ctx.strokeStyle="rgba(255,255,255,.67)";ctx.lineWidth=.8;ctx.strokeRect(x0,yTop,xr-x0,yBot-yTop);ctx.lineWidth=1;
+    dash(Y((T.lo+T.vh)*tick)-rh/2,x0,x0+tW,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vl)*tick)+rh/2,x0,x0+tW,"rgba(255,165,0,.53)");dash(Y((T.lo+T.poc)*tick),x0,x0+tW,"rgba(255,64,64,.67)");
+    dash(Y((T.lo+T.vvh)*tick)-rh/2,vL,xr,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vvl)*tick)+rh/2,vL,xr,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vpoc)*tick),vL,xr,"rgba(255,64,64,.67)");
     for(let i=0;i<T.n;i++){
-      const y=Y((T.lo+i+1)*tick);if(y>H||y+rh<0)continue;
-      if(i===T.poc||(i>=T.vl&&i<=T.vh)){ctx.fillStyle=i===T.poc?cPoc:cVa;ctx.fillRect(x0,y,(e.w-GAP)*cw,rh)}
-      const single=T.cnt[i]===1&&i>0&&i<T.n-1;
-      T.per[i].forEach((p,j)=>{
-        const col=single?cWarn:p<2?cAcc:(e===last&&p===T.pMax?cBuy:cInk);
-        if(txt){ctx.fillStyle=col;ctx.fillText(LET[p]||"?",x0+(j+.5)*cw,y+rh/2+1)}
-        else{ctx.globalAlpha=.65;ctx.fillStyle=col;ctx.fillRect(x0+j*cw,y,Math.max(1,cw-.6),Math.max(1,rh-.6));ctx.globalAlpha=1}
-      });
+      const y=Y((T.lo+i)*tick);if(y<-rh||y>H+rh)continue;
+      const col=i===T.poc?"#ff4040":T.cnt[i]===1?"#00ffff":(i>=T.vl&&i<=T.vh)?"#ffa500":"#5a5a5a";
+      if(txt){
+        let s=T.per[i].map(p=>LET[p]||"?").join("");if(i===T.oR)s+=" ◀Open";if(i===T.cR)s+=" ◀Close";
+        ctx.font=fs+"px "+MONO;ctx.fillStyle=col;ctx.textAlign="left";ctx.fillText(s,x0+2,y+1);
+      }else{ctx.fillStyle=col;ctx.fillRect(x0,y-rh/2,T.cnt[i]*cw,Math.max(1,rh-.6))}
+      if(T.vol[i]>0&&mx>0){
+        const bw=Math.max(.5,T.vol[i]/mx*vW),bl=xr-bw;
+        const vc=i===T.vpoc?"#ff4040":T.vsp[i]?"#00ffff":(i>=T.vvl&&i<=T.vvh)?"rgba(255,165,0,.8)":"rgba(68,68,68,.8)";
+        ctx.fillStyle=vc;ctx.fillRect(bl,y-rh/2,bw,Math.max(1,rh-1));
+        if(rh>=10||i===T.vpoc){
+          const t=fv(T.vol[i]),f=Math.max(7,Math.min(rh-2,10)),lw=t.length*f*.62;let lx,lc;
+          if(lw+3<=bl-vL-4){lx=bl-lw-3;lc=vc}else{lx=Math.min(bl+2,xr-lw-1);lc="#fff"}
+          ctx.font=f+"px "+MONO;ctx.fillStyle=lc;ctx.textAlign="left";ctx.fillText(t,Math.max(vL,Math.min(lx,xr-lw)),y+1);
+        }
+      }
     }
+    // nhãn H/L/VAH/VAL/POC: nến tăng đặt dưới cột, nến giảm đặt trên cột
+    const bull=T.close>=T.open,ls=["H:"+fm(T.h),"L:"+fm(T.l),"VAH:"+fm((T.lo+T.vh)*tick),"VAL:"+fm((T.lo+T.vl)*tick),"POC:"+fm((T.lo+T.poc)*tick)];
+    const ys=bull?yBot+4:yTop-4-ls.length*13;
+    ctx.font="9.5px "+MONO;ctx.textAlign="center";ctx.fillStyle=bull?"rgba(38,217,94,.67)":"rgba(255,76,76,.67)";
+    ls.forEach((t,k)=>ctx.fillText(t,x0+tW/2,ys+k*13+6.5));
   }
   const px=lastPx||last.T.close,py=Y(px);
-  ctx.strokeStyle=cSell;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(PW,py);ctx.stroke();ctx.setLineDash([]);
+  dash(py,0,PW,"#ffd700");
   ctx.restore();
   ctx.textAlign="left";ctx.font="11px system-ui";
-  ctx.fillStyle=cSell;ctx.fillRect(PW,py-8,AX,16);ctx.fillStyle="#fff";ctx.fillText(fx(px,dc),PW+4,py);
-  ctx.fillStyle=g("--mute");
+  ctx.fillStyle="#ffd700";ctx.fillRect(PW,py-8,AX,16);ctx.fillStyle="#111";ctx.fillText(fx(px,dc),PW+4,py);
+  ctx.fillStyle="#888";
   for(const e of L){const x0=e.u*cw-sx;if(x0+60>0&&x0<PW-40)ctx.fillText(dLabel(e.d).slice(5),Math.max(x0,3),H+BH/2)}
-  const f=(focus||last),T=f.T,tg=[T.poorH?"Poor High":"",T.poorL?"Poor Low":"",T.sp?T.sp+" single print":""].filter(Boolean).join(", ");
-  $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · IB ${fx(T.ibL)}–${fx(T.ibH)}${tg?" · "+tg:""}`;
+  const f=focus||last,T=f.T;
+  $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · TPO: POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · VP: POC ${fx((T.lo+T.vpoc)*tick)} VAH ${fx((T.lo+T.vvh)*tick)} VAL ${fx((T.lo+T.vvl)*tick)}`;
 }
 let raf=0;const redraw=()=>{raf||(raf=requestAnimationFrame(()=>{raf=0;draw()}))};
 function size(){const r=$("cv").getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height-BH;cv.width=W*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);redraw()}
@@ -171,14 +189,16 @@ function zoomAt(cx,cy,f){
   cw=ncw;rh=nrh;redraw();
 }
 const ptr=new Map(),pdist=()=>{const a=[...ptr.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};
-let pd=1;
-cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(ptr.size===2)pd=pdist()};
+let pd=1,mode="";
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(ptr.size===2)pd=pdist();mode=e.offsetX>W-AX?"y":e.offsetY>H?"x":""};
 cv.onpointermove=e=>{
   const o=ptr.get(e.pointerId);if(!o)return;const n=[e.offsetX,e.offsetY];ptr.set(e.pointerId,n);
   if(ptr.size===1){
     const dx=n[0]-o[0],dy=n[1]-o[1];
-    if(dx){follow=false;$("live").classList.remove("on");sx-=dx}
-    cp+=dy/rh*tick;redraw();
+    if(mode==="y")rh=Math.max(3,Math.min(40,rh*Math.exp(-dy/200))); // kéo trên thang giá để zoom dọc
+    else if(mode==="x"){const c=Math.max(2,Math.min(30,cw*Math.exp(dx/300)));sx=(sx+(W-AX)/2)/cw*c-(W-AX)/2;cw=c} // kéo trên thang ngày để zoom ngang
+    else{if(dx){follow=false;$("live").classList.remove("on");sx-=dx}cp+=dy/rh*tick}
+    redraw();
   }else if(ptr.size===2){const d=pdist(),a=[...ptr.values()];zoomAt((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,d/pd);pd=d}
 };
 cv.onpointerup=cv.onpointercancel=e=>ptr.delete(e.pointerId);
