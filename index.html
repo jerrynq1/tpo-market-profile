@@ -42,7 +42,7 @@ details input{width:100%;margin-top:6px}
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div id="info"></div><div id="cv"><canvas id="c"></canvas></div>
-    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Đường trắng = VAH/VAL của ngày đã xong, kéo dài cho đến khi một ngày sau đó chạm mức (ngày đang chạy và mức bị chạm ngay ngày kế tiếp thì không vẽ). Rê chuột (hoặc giữ ngón tay) để hiện dấu thập và giá chính xác. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
+    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Đường trắng = VAH/VAL của TPO, bắt đầu từ mép trái cột ngày đó và kéo dài sang phải cho đến khi một ngày sau đó chạm mức. Rê chuột (hoặc giữ ngón tay) để hiện dấu thập và giá chính xác. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
   </div>
 </div>
 <script>
@@ -141,7 +141,7 @@ function draw(){
     if(xr<0||x0>PW)continue;
     const yTop=Y((T.lo+T.n-1)*tick)-rh/2,yBot=Y(T.lo*tick)+rh/2,mx=Math.max(...T.vol);
     ctx.strokeStyle="rgba(255,255,255,.67)";ctx.lineWidth=.8;ctx.strokeRect(x0,yTop,xr-x0,yBot-yTop);ctx.lineWidth=1;
-    dash(Y((T.lo+T.vh)*tick)-rh/2,x0,x0+tW,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vl)*tick)+rh/2,x0,x0+tW,"rgba(255,165,0,.53)");dash(Y((T.lo+T.poc)*tick),x0,x0+tW,"rgba(255,64,64,.67)");
+    dash(Y((T.lo+T.poc)*tick),x0,x0+tW,"rgba(255,64,64,.67)");
     dash(Y((T.lo+T.vvh)*tick)-rh/2,vL,xr,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vvl)*tick)+rh/2,vL,xr,"rgba(255,165,0,.53)");dash(Y((T.lo+T.vpoc)*tick),vL,xr,"rgba(255,64,64,.67)");
     for(let i=0;i<T.n;i++){
       const y=Y((T.lo+i)*tick);if(y<-rh||y>H+rh)continue;
@@ -167,19 +167,20 @@ function draw(){
     ctx.font="9.5px "+MONO;ctx.textAlign="center";ctx.fillStyle=bull?"rgba(38,217,94,.67)":"rgba(255,76,76,.67)";
     ls.forEach((t,k)=>ctx.fillText(t,x0+tW/2,ys+k*13+6.5));
   }
-  // VAH/VAL TPO kéo dài sang phải (trắng) cho các ngày đã xong; dừng ở cột của ngày đầu tiên sau đó có giá chạm mức.
-  // Bỏ qua: ngày đang chạy (VA chưa chốt) và mức bị ngày kế tiếp chạm ngay (chỉ còn đoạn cụt giữa hai cột).
+  // VAH/VAL TPO (trắng): bắt đầu từ mép trái TPO của chính ngày đó, kéo dài sang phải, dừng ở cột của ngày đầu tiên sau đó có giá chạm mức.
+  // Ngày mới nhất chưa có ngày nào sau nó nên chỉ kẻ hết cột của chính nó.
   L.forEach((e,i)=>{
-    if(i===L.length-1)return;
-    const T=e.T,xs=(e.u+e.w-GAP)*cw-sx;
+    const T=e.T,xs=e.u*cw-sx,xr=(e.u+e.w-GAP)*cw-sx;
     [["VAH",(T.lo+T.vh+.5)*tick,(T.lo+T.vh)*tick],["VAL",(T.lo+T.vl-.5)*tick,(T.lo+T.vl)*tick]].forEach(([nm,pr,lab])=>{
-      let xe=PW+50,j=i+1;
-      for(;j<L.length;j++)if(pr>=L[j].T.l&&pr<=L[j].T.h){xe=L[j].u*cw-sx;break}
-      if(j===i+1||xs>PW)return;
-      const y=Y(pr),xv=Math.min(xe,PW),x1=Math.max(xs,0);
-      ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(xv,y);ctx.stroke();
-      const t=nm+" "+fm(lab);ctx.font="10px "+MONO;const lw=ctx.measureText(t).width+6;
-      if(xv-x1>lw+8){const lx=xv-lw-3;ctx.fillStyle="rgba(0,0,0,.75)";ctx.fillRect(lx,y-14,lw,13);ctx.fillStyle="#fff";ctx.textAlign="left";ctx.fillText(t,lx+3,y-7.5)} // nhãn nằm ở đầu phải của đường, có nền tối
+      let xe=i===L.length-1?xr:PW+50;
+      for(let j=i+1;j<L.length;j++)if(pr>=L[j].T.l&&pr<=L[j].T.h){xe=L[j].u*cw-sx;break}
+      const x1=Math.max(xs,0),xv=Math.min(xe,PW);
+      if(xv<=x1)return;
+      const y=Y(pr);ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(xv,y);ctx.stroke();
+      if(xe>PW){ // mức chưa bị chạm: ghi giá ở đầu phải
+        const t=nm+" "+fm(lab);ctx.font="10px "+MONO;const lw=ctx.measureText(t).width+6;
+        if(xv-x1>lw+8){ctx.fillStyle="rgba(0,0,0,.75)";ctx.fillRect(PW-lw-3,y-14,lw,13);ctx.fillStyle="#fff";ctx.textAlign="left";ctx.fillText(t,PW-lw,y-7.5)}
+      }
     });
   });
   const px=lastPx||last.T.close,py=Y(px);
