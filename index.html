@@ -21,7 +21,7 @@ button{cursor:pointer}button.on{background:var(--acc);color:var(--panel);border-
 #sym{width:96px}#tick{width:64px}
 #info{padding:6px 10px;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--line);min-height:30px}
 #cv{height:74vh;min-height:420px;position:relative;background:#1e1e1e}
-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
 .lg{font-size:12px;color:var(--mute);padding:6px 10px}
 details summary{cursor:pointer;color:var(--mute);font-size:13px}
 details input{width:100%;margin-top:6px}
@@ -42,7 +42,7 @@ details input{width:100%;margin-top:6px}
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div id="info"></div><div id="cv"><canvas id="c"></canvas></div>
-    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
+    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Đường trắng = VAH/VAL kéo dài cho đến khi một ngày sau đó chạm mức. Rê chuột (hoặc giữ ngón tay) để hiện dấu thập và giá chính xác. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
   </div>
 </div>
 <script>
@@ -53,7 +53,7 @@ let cfg=rd("sb_cfg"); // dùng chung với trang Signal Bridge nếu cùng domai
 let sym=localStorage.getItem("tpo_sym")||"XAUUSD", tick=Number(localStorage.getItem("tpo_tick"))||0.5;
 const byDay=new Map(), cache=new Map(); // ngày -> Map(t -> nến), ngày -> profile đã tính
 let form=null,srv=0,lastPx=null,formT=0,busy=false,noMore=false,loadingOld=false,follow=true;
-let cw=9,rh=14,sx=0,cp=null; // rộng 1 chữ, cao 1 hàng, vị trí cuộn ngang, giá ở giữa màn hình
+let cw=9,rh=14,sx=0,cp=null,ch=null; // ch = vị trí dấu thập [x,y] trên canvas // rộng 1 chữ, cao 1 hàng, vị trí cuộn ngang, giá ở giữa màn hình
 const AX=58,BH=22,GAP=3,MX=24;
 const cv=$("c"),ctx=cv.getContext("2d");let W=0,H=0;
 
@@ -167,6 +167,17 @@ function draw(){
     ctx.font="9.5px "+MONO;ctx.textAlign="center";ctx.fillStyle=bull?"rgba(38,217,94,.67)":"rgba(255,76,76,.67)";
     ls.forEach((t,k)=>ctx.fillText(t,x0+tW/2,ys+k*13+6.5));
   }
+  // VAH/VAL của TPO kéo dài sang phải (trắng), dừng ở cột của ngày đầu tiên sau đó có giá chạm mức này
+  L.forEach((e,i)=>{
+    const T=e.T,xs=(e.u+e.w-GAP)*cw-sx;
+    [["VAH",(T.lo+T.vh+.5)*tick,(T.lo+T.vh)*tick],["VAL",(T.lo+T.vl-.5)*tick,(T.lo+T.vl)*tick]].forEach(([nm,pr,lab])=>{
+      let xe=PW+50;
+      for(let j=i+1;j<L.length;j++)if(pr>=L[j].T.l&&pr<=L[j].T.h){xe=L[j].u*cw-sx;break}
+      if(xe<=xs||xs>PW)return;
+      const y=Y(pr);ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xs,y);ctx.lineTo(xe,y);ctx.stroke();
+      ctx.fillStyle="#fff";ctx.font="9.5px "+MONO;ctx.textAlign="left";ctx.fillText(nm+" "+fm(lab),Math.max(xs,0)+3,y-7);
+    });
+  });
   const px=lastPx||last.T.close,py=Y(px);
   dash(py,0,PW,"#ffd700");
   ctx.restore();
@@ -174,6 +185,16 @@ function draw(){
   ctx.fillStyle="#ffd700";ctx.fillRect(PW,py-8,AX,16);ctx.fillStyle="#111";ctx.fillText(fx(px,dc),PW+4,py);
   ctx.fillStyle="#888";
   for(const e of L){const x0=e.u*cw-sx;if(x0+60>0&&x0<PW-40)ctx.fillText(dLabel(e.d).slice(5),Math.max(x0,3),H+BH/2)}
+  if(ch&&ch[0]<PW&&ch[1]<H){
+    const [cx,cy]=ch;
+    ctx.save();ctx.strokeStyle="rgba(255,255,255,.55)";ctx.setLineDash([3,3]);ctx.beginPath();
+    ctx.moveTo(0,cy);ctx.lineTo(PW,cy);ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();ctx.restore();
+    const tag=(t,x,y,w)=>{ctx.fillStyle="#000";ctx.fillRect(x,y-8,w,16);ctx.strokeStyle="#fff";ctx.lineWidth=.5;ctx.strokeRect(x,y-8,w,16);ctx.lineWidth=1;
+      ctx.fillStyle="#fff";ctx.font="11px system-ui";ctx.textAlign="left";ctx.fillText(t,x+4,y)};
+    tag(fx(cp+(H/2-cy)/rh*tick),PW,cy,AX);   // giá chính xác tại con trỏ
+    const wx=sx+cx,eh=L.find(e=>wx>=e.u*cw&&wx<(e.u+e.w)*cw);
+    if(eh)tag(dLabel(eh.d),Math.max(0,Math.min(cx-50,PW-100)),H+BH/2,100);
+  }
   const f=focus||last,T=f.T;
   $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · TPO: POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · VP: POC ${fx((T.lo+T.vpoc)*tick)} VAH ${fx((T.lo+T.vvh)*tick)} VAL ${fx((T.lo+T.vvl)*tick)}`;
 }
@@ -190,9 +211,11 @@ function zoomAt(cx,cy,f){
 }
 const ptr=new Map(),pdist=()=>{const a=[...ptr.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};
 let pd=1,mode="";
-cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(ptr.size===2)pd=pdist();mode=e.offsetX>W-AX?"y":e.offsetY>H?"x":""};
+cv.onpointerdown=e=>{ch=[e.offsetX,e.offsetY];cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(ptr.size===2)pd=pdist();mode=e.offsetX>W-AX?"y":e.offsetY>H?"x":""};
 cv.onpointermove=e=>{
-  const o=ptr.get(e.pointerId);if(!o)return;const n=[e.offsetX,e.offsetY];ptr.set(e.pointerId,n);
+  const o=ptr.get(e.pointerId);
+  if(e.pointerType==="mouse"||o){ch=[e.offsetX,e.offsetY];if(!o){redraw();return}}else return;
+  const n=[e.offsetX,e.offsetY];ptr.set(e.pointerId,n);
   if(ptr.size===1){
     const dx=n[0]-o[0],dy=n[1]-o[1];
     if(mode==="y")rh=Math.max(3,Math.min(40,rh*Math.exp(-dy/200))); // kéo trên thang giá để zoom dọc
@@ -201,7 +224,8 @@ cv.onpointermove=e=>{
     redraw();
   }else if(ptr.size===2){const d=pdist(),a=[...ptr.values()];zoomAt((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,d/pd);pd=d}
 };
-cv.onpointerup=cv.onpointercancel=e=>ptr.delete(e.pointerId);
+cv.onpointerup=cv.onpointercancel=e=>{ptr.delete(e.pointerId);if(e.pointerType!=="mouse"){ch=null;redraw()}};
+cv.onpointerleave=()=>{ch=null;redraw()};
 cv.onwheel=e=>{e.preventDefault();zoomAt(e.offsetX,e.offsetY,Math.exp(-e.deltaY*.0015))};
 const goLive=()=>{follow=true;$("live").classList.add("on");if(lastPx)cp=lastPx;redraw()};
 cv.ondblclick=goLive;$("live").onclick=goLive;
