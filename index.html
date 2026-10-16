@@ -5,37 +5,24 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TPO Live</title>
 <style>
-:root{--bg:#eceff2;--panel:#fff;--ink:#16212b;--mute:#667583;--line:#d5dbe1;--buy:#0d7a6b;--sell:#b3362e;--warn:#a86a10;--acc:#1d3b57;--va:#e3edf6;--poc:#ffe9a8}
+:root{--bg:#eceff2;--panel:#fff;--ink:#16212b;--mute:#667583;--line:#d5dbe1;--buy:#0d7a6b;--sell:#b3362e;--warn:#a86a10;--acc:#1d3b57;--va:#dbe8f4;--poc:#ffe08a}
 @media(prefers-color-scheme:dark){:root{--bg:#10161c;--panel:#18212a;--ink:#e6ecf1;--mute:#8d9ba8;--line:#2b3742;--buy:#35c2ae;--sell:#f0766d;--warn:#e0a443;--acc:#8fb8dd;--va:#1f3345;--poc:#5a4a14}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Segoe UI",sans-serif}
-.wrap{max-width:900px;margin:0 auto;padding:10px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+.wrap{max-width:1200px;margin:0 auto;padding:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
 h1{font-size:17px;margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;gap:8px}
 #st{font-size:12px;font-weight:400;color:var(--mute)}
 #st i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:5px}
 #st.ok i{background:var(--buy)}#st.bad i{background:var(--sell)}
 .bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-input,select,button{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:0}
+input,button{font:inherit;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:0}
 button{cursor:pointer}button.on{background:var(--acc);color:var(--panel);border-color:var(--acc)}
-#sym{width:84px}#tick{width:64px}#days{flex:1;min-width:130px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px}
-.k{border:1px solid var(--line);border-radius:6px;padding:4px 8px}
-.k span{display:block;font-size:11px;color:var(--mute)}.k b{font-size:15px}
-.tags{margin-top:6px;font-size:12px;color:var(--warn)}
-#prof{max-height:68vh;overflow:auto;font:13px/16px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px}
-.r{display:flex;white-space:nowrap;padding:0 6px;min-width:max-content}
-.r .p{width:64px;flex:none;color:var(--mute);font-weight:400}
-.r .l{letter-spacing:1px;padding-right:10px}
-.r .n{color:var(--mute);font-style:normal;font-size:11px}
-.r.va{background:var(--va)}
-.r.poc{background:var(--poc);font-weight:700}
-.r.sp .l{color:var(--warn)}
-.r.cur{box-shadow:inset 3px 0 0 var(--sell)}
-.r.cur .p{color:var(--sell);font-weight:700}
-.r u{text-decoration:none;color:var(--acc);font-weight:700}
-.r s{text-decoration:none;color:var(--buy);font-weight:700}
-.lg{font-size:12px;color:var(--mute);margin-top:6px}
+#sym{width:96px}#tick{width:64px}
+#info{padding:6px 10px;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--line);min-height:30px}
+#cv{height:74vh;min-height:420px;position:relative}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+.lg{font-size:12px;color:var(--mute);padding:6px 10px}
 details summary{cursor:pointer;color:var(--mute);font-size:13px}
 details input{width:100%;margin-top:6px}
 </style>
@@ -45,23 +32,17 @@ details input{width:100%;margin-top:6px}
   <div class="card">
     <h1><span>TPO <span id="ttl">XAUUSD</span></span><span id="st"><i></i><span id="stt">Chưa kết nối</span></span></h1>
     <div class="bar">
-      <input id="sym" value="XAUUSD" aria-label="Mã"> 
-      <button id="prev" aria-label="Ngày trước">&larr;</button>
-      <select id="days" aria-label="Ngày"></select>
-      <button id="next" aria-label="Ngày sau">&rarr;</button>
-      <button id="live">Live</button>
-      <input id="tick" type="number" step="0.1" min="0.01" value="0.5" aria-label="Kích thước hàng giá">
+      <input id="sym" aria-label="Mã"><input id="tick" type="number" step="0.1" min="0.01" aria-label="Kích thước hàng giá">
+      <button id="zo" aria-label="Thu nhỏ">&minus;</button><button id="zi" aria-label="Phóng to">+</button><button id="live" class="on">Live</button>
     </div>
     <details id="cfgBox" style="margin-top:8px"><summary>Kết nối API</summary>
-      <input id="apiUrl" placeholder="https://signal-bridge.xxx.workers.dev">
-      <input id="token" type="password" placeholder="Secret token">
+      <input id="apiUrl" placeholder="https://signal-bridge.xxx.workers.dev"><input id="token" type="password" placeholder="Secret token">
       <button id="save" style="margin-top:6px">Lưu</button>
     </details>
   </div>
-  <div class="card"><div class="grid" id="stats"></div><div class="tags" id="tags"></div></div>
-  <div class="card">
-    <div id="prof"></div>
-    <div class="lg">Mỗi chữ = 30 phút giờ server MT5 (A = 00:00). Nền xanh = Value Area 70%, nền vàng = POC, chữ xanh dương = Initial Balance (A, B), chữ cam = single print, vạch đỏ = giá hiện tại.</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="info"></div><div id="cv"><canvas id="c"></canvas></div>
+    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, nhấp đúp để về Live. Nền xanh = Value Area 70%, vàng = POC, chữ xanh dương = IB (A, B), cam = single print, đường đỏ = giá hiện tại. Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
   </div>
 </div>
 <script>
@@ -70,10 +51,12 @@ const LET="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const rd=k=>{try{return JSON.parse(localStorage.getItem(k)||"{}")}catch(e){return{}}};
 let cfg=rd("sb_cfg"); // dùng chung với trang Signal Bridge nếu cùng domain
 let sym=localStorage.getItem("tpo_sym")||"XAUUSD", tick=Number(localStorage.getItem("tpo_tick"))||0.5;
-const bars=new Map(); // t -> [t,o,h,l,c,v] (nến đã đóng)
-let form=null, srv=0, lastPx=null, day=null, follow=true, recenter=true, formT=0, busy=false;
+const byDay=new Map(), cache=new Map(); // ngày -> Map(t -> nến), ngày -> profile đã tính
+let form=null,srv=0,lastPx=null,formT=0,busy=false,noMore=false,loadingOld=false,follow=true;
+let cw=9,rh=14,sx=0,cp=null; // rộng 1 chữ, cao 1 hàng, vị trí cuộn ngang, giá ở giữa màn hình
+const AX=58,BH=22,GAP=3,MX=24;
+const cv=$("c"),ctx=cv.getContext("2d");let W=0,H=0;
 
-// ---------- tính TPO (hàm thuần, dễ kiểm thử) ----------
 function tpo(all,d,tk){
   const a=d*86400,b=a+86400, rows=new Map();
   const src=all.filter(x=>x[0]>=a&&x[0]<b).sort((x,y)=>x[0]-y[0]);
@@ -103,55 +86,127 @@ function tpo(all,d,tk){
     sp:cnt.reduce((x,c,i)=>x+(c===1&&i>0&&i<n-1?1:0),0)};
 }
 
-// ---------- hiển thị ----------
+
 const dec=()=>Number.isInteger(tick)?0:Math.min(4,(String(tick).split(".")[1]||"").length);
 const fx=(v,d=2)=>v==null?"–":Number(v).toFixed(d);
-const days=()=>[...new Set([...bars.keys(),...(form?[form[0]]:[])].map(t=>Math.floor(t/86400)))].sort((x,y)=>x-y);
-const dLabel=d=>{const s=new Date(d*864e5);return s.toISOString().slice(0,10)+" ("+["CN","T2","T3","T4","T5","T6","T7"][s.getUTCDay()]+")"};
-function fillDays(){
-  const ds=days().reverse();
-  $("days").innerHTML=ds.map(d=>`<option value="${d}">${dLabel(d)}</option>`).join("");
-  if(follow&&ds.length)day=ds[0];
-  if(day!=null)$("days").value=day;
-  $("live").classList.toggle("on",follow);
-}
-function draw(){
-  if(day==null){$("prof").innerHTML='<div class="r">Chưa có nến nào. Kiểm tra EA đã gửi nến M1 chưa.</div>';return}
-  const all=[...bars.values()].filter(x=>!form||x[0]!==form[0]); if(form)all.push(form);
-  const T=tpo(all,day,tick);
-  if(!T){$("prof").innerHTML='<div class="r">Ngày này không có dữ liệu.</div>';$("stats").innerHTML="";$("tags").textContent="";return}
-  const isLive=day===days().slice(-1)[0], px=isLive&&lastPx?lastPx:T.close, curRow=Math.floor(px/tick+1e-9)-T.lo, d=dec();
-  let out="";
-  for(let i=T.n-1;i>=0;i--){
-    const cls=["r"];
-    if(i===T.poc)cls.push("poc");else if(i>=T.vl&&i<=T.vh)cls.push("va");
-    if(T.cnt[i]===1&&i>0&&i<T.n-1)cls.push("sp");
-    if(i===curRow)cls.push("cur");
-    const ls=T.per[i].map(p=>{const c=LET[p]||"?";return p===T.pMax&&isLive?`<s>${c}</s>`:p<2?`<u>${c}</u>`:c}).join("");
-    out+=`<div class="${cls.join(" ")}"><b class="p">${fx((T.lo+i)*tick,d)}</b><span class="l">${ls}</span><i class="n">${T.cnt[i]}</i></div>`;
-  }
-  const box=$("prof"), keep=box.scrollTop; box.innerHTML=out;
-  box.scrollTop=keep;
-  if(recenter){const el=box.querySelector(".cur,.poc");if(el)box.scrollTop=el.offsetTop-box.clientHeight/2;recenter=false}
-  const K=(k,v)=>`<div class="k"><span>${k}</span><b>${v}</b></div>`;
-  $("stats").innerHTML=K("Open",fx(T.open))+K("High",fx(T.h))+K("Low",fx(T.l))+K(isLive?"Giá":"Close",fx(px))+
-    K("POC",fx((T.lo+T.poc)*tick))+K("VAH",fx((T.lo+T.vh)*tick))+K("VAL",fx((T.lo+T.vl)*tick))+
-    K("IB High",fx(T.ibH))+K("IB Low",fx(T.ibL))+K("Biên độ",fx(T.h-T.l));
-  const tg=[];if(T.poorH)tg.push("Poor High");if(T.poorL)tg.push("Poor Low");if(T.sp)tg.push(T.sp+" hàng single print");
-  $("tags").textContent=tg.join(" · ");
-}
+const dLabel=d=>{const s=new Date(d*864e5);return s.toISOString().slice(0,10)+" "+["CN","T2","T3","T4","T5","T6","T7"][s.getUTCDay()]};
 
 // ---------- dữ liệu ----------
+function ingest(arr){
+  for(const b of arr){
+    const d=Math.floor(b[0]/86400);let m=byDay.get(d);if(!m){m=new Map();byDay.set(d,m)}
+    const o=m.get(b[0]);if(!o||o[2]!==b[2]||o[3]!==b[3]||o[4]!==b[4]){m.set(b[0],b);cache.delete(d)}
+  }
+}
+const dayList=()=>[...byDay.keys()].sort((a,b)=>a-b);
+function prof(d){
+  const m=byDay.get(d);if(!m)return null;
+  const fd=form&&Math.floor(form[0]/86400)===d, sig=m.size+":"+(fd?form.join():"")+":"+tick;
+  let c=cache.get(d);
+  if(!c||c.sig!==sig){const a=[...m.values()].filter(x=>!fd||x[0]!==form[0]);if(fd)a.push(form);c={sig,T:tpo(a,d,tick)};cache.set(d,c)}
+  return c.T;
+}
+function layout(){const L=[];let u=0;for(const d of dayList()){const T=prof(d);if(!T)continue;const w=Math.max(...T.cnt)+GAP;L.push({d,T,u,w});u+=w}return{L,total:u}}
+
+// ---------- vẽ ----------
+function draw(){
+  if(!W)return;
+  const css=getComputedStyle(document.documentElement),g=k=>css.getPropertyValue(k).trim();
+  const {L,total}=layout(),PW=W-AX;
+  ctx.clearRect(0,0,W,H+BH);
+  if(!L.length){ctx.fillStyle=g("--mute");ctx.font="13px system-ui";ctx.fillText("Chưa có nến nào.",12,24);return}
+  const last=L[L.length-1];
+  if(cp==null)cp=lastPx||(last.T.lo+last.T.poc)*tick;
+  if(follow)sx=(last.u+last.w-GAP)*cw+MX-PW;
+  sx=Math.max(-PW*.6,Math.min(sx,total*cw-PW*.4));
+  if(sx<PW*.3&&!noMore&&!loadingOld)loadOlder();
+  const Y=p=>H/2-(p-cp)/tick*rh, dc=dec();
+  ctx.textBaseline="middle";ctx.font="11px system-ui";ctx.textAlign="left";
+  let step=1;const need=Math.ceil(34/rh);for(const s of [1,2,4,5,10,20,50,100,200,500]){step=s;if(s>=need)break}
+  const rTop=Math.floor(cp/tick+H/2/rh)+1,rBot=Math.floor(cp/tick-H/2/rh)-1;
+  for(let r=Math.ceil(rBot/step)*step;r<=rTop;r+=step){
+    const y=Y(r*tick);ctx.globalAlpha=.5;ctx.strokeStyle=g("--line");ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(PW,y);ctx.stroke();
+    ctx.globalAlpha=1;ctx.fillStyle=g("--mute");ctx.fillText(fx(r*tick,dc),PW+4,y);
+  }
+  const cInk=g("--ink"),cAcc=g("--acc"),cBuy=g("--buy"),cWarn=g("--warn"),cVa=g("--va"),cPoc=g("--poc"),cLine=g("--line"),cSell=g("--sell");
+  const txt=rh>=9&&cw>=6, fs=Math.floor(Math.min(rh-1,cw/.62));
+  let focus=null;const mid=sx+PW/2;
+  ctx.save();ctx.beginPath();ctx.rect(0,0,PW,H);ctx.clip();
+  ctx.font=fs+"px ui-monospace,Menlo,Consolas,monospace";ctx.textAlign="center";
+  for(const e of L){
+    const x0=e.u*cw-sx,x1=(e.u+e.w)*cw-sx,T=e.T;
+    if(mid>=e.u*cw&&mid<(e.u+e.w)*cw)focus=e;
+    if(x1<0||x0>PW)continue;
+    ctx.strokeStyle=cLine;ctx.beginPath();ctx.moveTo(x1-GAP*cw/2,0);ctx.lineTo(x1-GAP*cw/2,H);ctx.stroke();
+    for(let i=0;i<T.n;i++){
+      const y=Y((T.lo+i+1)*tick);if(y>H||y+rh<0)continue;
+      if(i===T.poc||(i>=T.vl&&i<=T.vh)){ctx.fillStyle=i===T.poc?cPoc:cVa;ctx.fillRect(x0,y,(e.w-GAP)*cw,rh)}
+      const single=T.cnt[i]===1&&i>0&&i<T.n-1;
+      T.per[i].forEach((p,j)=>{
+        const col=single?cWarn:p<2?cAcc:(e===last&&p===T.pMax?cBuy:cInk);
+        if(txt){ctx.fillStyle=col;ctx.fillText(LET[p]||"?",x0+(j+.5)*cw,y+rh/2+1)}
+        else{ctx.globalAlpha=.65;ctx.fillStyle=col;ctx.fillRect(x0+j*cw,y,Math.max(1,cw-.6),Math.max(1,rh-.6));ctx.globalAlpha=1}
+      });
+    }
+  }
+  const px=lastPx||last.T.close,py=Y(px);
+  ctx.strokeStyle=cSell;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(PW,py);ctx.stroke();ctx.setLineDash([]);
+  ctx.restore();
+  ctx.textAlign="left";ctx.font="11px system-ui";
+  ctx.fillStyle=cSell;ctx.fillRect(PW,py-8,AX,16);ctx.fillStyle="#fff";ctx.fillText(fx(px,dc),PW+4,py);
+  ctx.fillStyle=g("--mute");
+  for(const e of L){const x0=e.u*cw-sx;if(x0+60>0&&x0<PW-40)ctx.fillText(dLabel(e.d).slice(5),Math.max(x0,3),H+BH/2)}
+  const f=(focus||last),T=f.T,tg=[T.poorH?"Poor High":"",T.poorL?"Poor Low":"",T.sp?T.sp+" single print":""].filter(Boolean).join(", ");
+  $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · IB ${fx(T.ibL)}–${fx(T.ibH)}${tg?" · "+tg:""}`;
+}
+let raf=0;const redraw=()=>{raf||(raf=requestAnimationFrame(()=>{raf=0;draw()}))};
+function size(){const r=$("cv").getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height-BH;cv.width=W*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);redraw()}
+new ResizeObserver(size).observe($("cv"));
+
+// ---------- kéo / zoom ----------
+function zoomAt(cx,cy,f){
+  const ncw=Math.max(2,Math.min(30,cw*f)),nrh=Math.max(3,Math.min(40,rh*f));
+  sx=(sx+cx)/cw*ncw-cx;
+  const p=cp+(H/2-cy)/rh*tick;cp=p-(H/2-cy)/nrh*tick;
+  cw=ncw;rh=nrh;redraw();
+}
+const ptr=new Map(),pdist=()=>{const a=[...ptr.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};
+let pd=1;
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.offsetX,e.offsetY]);if(ptr.size===2)pd=pdist()};
+cv.onpointermove=e=>{
+  const o=ptr.get(e.pointerId);if(!o)return;const n=[e.offsetX,e.offsetY];ptr.set(e.pointerId,n);
+  if(ptr.size===1){
+    const dx=n[0]-o[0],dy=n[1]-o[1];
+    if(dx){follow=false;$("live").classList.remove("on");sx-=dx}
+    cp+=dy/rh*tick;redraw();
+  }else if(ptr.size===2){const d=pdist(),a=[...ptr.values()];zoomAt((a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2,d/pd);pd=d}
+};
+cv.onpointerup=cv.onpointercancel=e=>ptr.delete(e.pointerId);
+cv.onwheel=e=>{e.preventDefault();zoomAt(e.offsetX,e.offsetY,Math.exp(-e.deltaY*.0015))};
+const goLive=()=>{follow=true;$("live").classList.add("on");if(lastPx)cp=lastPx;redraw()};
+cv.ondblclick=goLive;$("live").onclick=goLive;
+$("zi").onclick=()=>zoomAt((W-AX)/2,H/2,1.25);$("zo").onclick=()=>zoomAt((W-AX)/2,H/2,.8);
+
+// ---------- gọi API ----------
 function status(ok,msg){$("st").className=ok?"ok":"bad";$("stt").textContent=msg}
 async function api(p){
   const r=await fetch(cfg.apiUrl+p,{headers:{"X-Token":cfg.token}});
   if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
 }
+const bq=(since,until)=>`/api/bars?symbol=${encodeURIComponent(sym)}&since=${since}`+(until?`&until=${until}`:"");
 async function loadBars(){
-  const now=srv||Math.floor(Date.now()/1000), since=(Math.floor(now/86400)-4)*86400; // 5 ngày gần nhất
-  const d=await api(`/api/bars?symbol=${encodeURIComponent(sym)}&since=${since}`);
-  for(const b of d.bars)bars.set(b[0],b);
-  fillDays();draw();
+  const now=srv||Math.floor(Date.now()/1000);
+  ingest((await api(bq((Math.floor(now/86400)-4)*86400))).bars);redraw();
+}
+async function loadOlder(){
+  const ds=dayList();if(!ds.length)return;
+  loadingOld=true;const d0=ds[0];
+  try{
+    const r=await api(bq((d0-5)*86400,d0*86400));
+    if(!r.bars.length){noMore=true;status(true,"Live · hết dữ liệu cũ")}
+    else{const L0=layout().L[0],u0=L0?L0.u*cw:0;ingest(r.bars);const L1=layout().L.find(e=>e.d===d0);sx+=(L1?L1.u*cw:0)-u0;redraw()}
+  }catch(e){}
+  loadingOld=false;
 }
 async function tickLoop(){
   if(!cfg.apiUrl||!cfg.token||document.hidden||busy)return;
@@ -159,18 +214,19 @@ async function tickLoop(){
   try{
     const q=await api("/api/quote");
     if(q.serverTime)srv=q.serverTime;
-    const qq=(q.quotes||[]).find(x=>x.symbol===sym);lastPx=qq?Number(qq.bid):lastPx;
+    const qq=(q.quotes||[]).find(x=>x.symbol===sym);if(qq)lastPx=Number(qq.bid);
     form=q.bar&&q.bar.symbol===sym?q.bar.b:null;
-    if(form&&form[0]!==formT){const first=!formT;formT=form[0];setTimeout(()=>loadBars().catch(()=>{}),first?0:3000)} // nến cũ vừa đóng: nạp lại
+    if(form){const fd=Math.floor(form[0]/86400);if(!byDay.has(fd))byDay.set(fd,new Map())}
+    if(form&&form[0]!==formT){const first=!formT;formT=form[0];setTimeout(()=>loadBars().catch(()=>{}),first?0:3000)}
     const age=q.receivedAt?Math.round((Date.now()-q.receivedAt)/1000):null;
-    if(age!=null&&age>20)status(false,"Không có dữ liệu mới ("+age+"s)");else status(true,"Live");
-    fillDays();draw();
+    if(age!=null&&age>20)status(false,"Không có dữ liệu mới ("+age+"s)");else if(!noMore)status(true,"Live");
+    redraw();
   }catch(e){status(false,"Lỗi: "+e.message)}
   busy=false;
 }
 async function start(){
-  bars.clear();form=null;formT=0;lastPx=null;recenter=true;
-  if(!cfg.apiUrl||!cfg.token){$("cfgBox").open=true;status(false,"Cần nhập API URL và token");return}
+  byDay.clear();cache.clear();form=null;formT=0;lastPx=null;cp=null;noMore=false;follow=true;$("live").classList.add("on");
+  if(!cfg.apiUrl||!cfg.token){$("cfgBox").open=true;status(false,"Cần nhập API URL và token");redraw();return}
   try{await tickLoop();await loadBars()}catch(e){status(false,"Lỗi: "+e.message)}
 }
 
@@ -183,11 +239,7 @@ $("save").onclick=()=>{
   $("cfgBox").open=false;start();
 };
 $("sym").onchange=()=>{sym=$("sym").value.trim()||"XAUUSD";localStorage.setItem("tpo_sym",sym);$("ttl").textContent=sym;start()};
-$("tick").onchange=()=>{const v=Number($("tick").value);if(v>0){tick=v;localStorage.setItem("tpo_tick",v);recenter=true;draw()}};
-$("days").onchange=()=>{day=Number($("days").value);follow=day===days().slice(-1)[0];recenter=true;fillDays();draw()};
-const step=s=>{const ds=days(),i=ds.indexOf(day)+s;if(i>=0&&i<ds.length){day=ds[i];follow=i===ds.length-1;recenter=true;fillDays();draw()}};
-$("prev").onclick=()=>step(-1);$("next").onclick=()=>step(1);
-$("live").onclick=()=>{follow=true;recenter=true;fillDays();draw()};
+$("tick").onchange=()=>{const v=Number($("tick").value);if(v>0){tick=v;localStorage.setItem("tpo_tick",v);cache.clear();cp=lastPx;redraw()}};
 setInterval(tickLoop,1000);
 setInterval(()=>{if(cfg.apiUrl&&!document.hidden)loadBars().catch(()=>{})},60000);
 start();
