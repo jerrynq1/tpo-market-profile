@@ -42,7 +42,7 @@ details input{width:100%;margin-top:6px}
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div id="info"></div><div id="cv"><canvas id="c"></canvas></div>
-    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Đường trắng = VAH/VAL kéo dài cho đến khi một ngày sau đó chạm mức. Rê chuột (hoặc giữ ngón tay) để hiện dấu thập và giá chính xác. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
+    <div class="lg">Kéo để cuộn, lăn chuột hoặc chụm 2 ngón để zoom, kéo trên thang giá (phải) hoặc thang ngày (dưới) để zoom riêng từng chiều, nhấp đúp để về Live. Đường trắng = VAH/VAL của ngày đã xong, kéo dài cho đến khi một ngày sau đó chạm mức (ngày đang chạy và mức bị chạm ngay ngày kế tiếp thì không vẽ). Rê chuột (hoặc giữ ngón tay) để hiện dấu thập và giá chính xác. Cột trái = TPO (cam = Value Area 70%, đỏ = POC, cyan = single print), cột phải = Volume Profile (tick volume M1). Mỗi chữ = 30 phút giờ server (A = 00:00).</div>
   </div>
 </div>
 <script>
@@ -152,7 +152,7 @@ function draw(){
       }else{ctx.fillStyle=col;ctx.fillRect(x0,y-rh/2,T.cnt[i]*cw,Math.max(1,rh-.6))}
       if(T.vol[i]>0&&mx>0){
         const bw=Math.max(.5,T.vol[i]/mx*vW),bl=xr-bw;
-        const vc=i===T.vpoc?"#ff4040":T.vsp[i]?"#00ffff":(i>=T.vvl&&i<=T.vvh)?"rgba(255,165,0,.8)":"rgba(68,68,68,.8)";
+        const vc=i===T.vpoc?"#ff4040":T.vsp[i]?"#00ffff":(i>=T.vvl&&i<=T.vvh)?"rgba(255,165,0,.8)":"rgba(120,120,120,.8)";
         ctx.fillStyle=vc;ctx.fillRect(bl,y-rh/2,bw,Math.max(1,rh-1));
         if(rh>=10||i===T.vpoc){
           const t=fv(T.vol[i]),f=Math.max(7,Math.min(rh-2,10)),lw=t.length*f*.62;let lx,lc;
@@ -167,15 +167,19 @@ function draw(){
     ctx.font="9.5px "+MONO;ctx.textAlign="center";ctx.fillStyle=bull?"rgba(38,217,94,.67)":"rgba(255,76,76,.67)";
     ls.forEach((t,k)=>ctx.fillText(t,x0+tW/2,ys+k*13+6.5));
   }
-  // VAH/VAL của TPO kéo dài sang phải (trắng), dừng ở cột của ngày đầu tiên sau đó có giá chạm mức này
+  // VAH/VAL TPO kéo dài sang phải (trắng) cho các ngày đã xong; dừng ở cột của ngày đầu tiên sau đó có giá chạm mức.
+  // Bỏ qua: ngày đang chạy (VA chưa chốt) và mức bị ngày kế tiếp chạm ngay (chỉ còn đoạn cụt giữa hai cột).
   L.forEach((e,i)=>{
+    if(i===L.length-1)return;
     const T=e.T,xs=(e.u+e.w-GAP)*cw-sx;
     [["VAH",(T.lo+T.vh+.5)*tick,(T.lo+T.vh)*tick],["VAL",(T.lo+T.vl-.5)*tick,(T.lo+T.vl)*tick]].forEach(([nm,pr,lab])=>{
-      let xe=PW+50;
-      for(let j=i+1;j<L.length;j++)if(pr>=L[j].T.l&&pr<=L[j].T.h){xe=L[j].u*cw-sx;break}
-      if(xe<=xs||xs>PW)return;
-      const y=Y(pr);ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xs,y);ctx.lineTo(xe,y);ctx.stroke();
-      ctx.fillStyle="#fff";ctx.font="9.5px "+MONO;ctx.textAlign="left";ctx.fillText(nm+" "+fm(lab),Math.max(xs,0)+3,y-7);
+      let xe=PW+50,j=i+1;
+      for(;j<L.length;j++)if(pr>=L[j].T.l&&pr<=L[j].T.h){xe=L[j].u*cw-sx;break}
+      if(j===i+1||xs>PW)return;
+      const y=Y(pr),xv=Math.min(xe,PW),x1=Math.max(xs,0);
+      ctx.strokeStyle="#fff";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(xv,y);ctx.stroke();
+      const t=nm+" "+fm(lab);ctx.font="10px "+MONO;const lw=ctx.measureText(t).width+6;
+      if(xv-x1>lw+8){const lx=xv-lw-3;ctx.fillStyle="rgba(0,0,0,.75)";ctx.fillRect(lx,y-14,lw,13);ctx.fillStyle="#fff";ctx.textAlign="left";ctx.fillText(t,lx+3,y-7.5)} // nhãn nằm ở đầu phải của đường, có nền tối
     });
   });
   const px=lastPx||last.T.close,py=Y(px);
@@ -196,7 +200,7 @@ function draw(){
     if(eh)tag(dLabel(eh.d),Math.max(0,Math.min(cx-50,PW-100)),H+BH/2,100);
   }
   const f=focus||last,T=f.T;
-  $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · TPO: POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · VP: POC ${fx((T.lo+T.vpoc)*tick)} VAH ${fx((T.lo+T.vvh)*tick)} VAL ${fx((T.lo+T.vvl)*tick)}`;
+  $("info").textContent=`${dLabel(f.d)} · O ${fx(T.open)} H ${fx(T.h)} L ${fx(T.l)} C ${fx(T.close)} · TPO: POC ${fx((T.lo+T.poc)*tick)} VAH ${fx((T.lo+T.vh)*tick)} VAL ${fx((T.lo+T.vl)*tick)} · VP: POC ${fx((T.lo+T.vpoc)*tick)} VAH ${fx((T.lo+T.vvh)*tick)} VAL ${fx((T.lo+T.vvl)*tick)}${Math.max(...T.vol)<=0?" (nến chưa có tick volume nên VP trống)":""}`;
 }
 let raf=0;const redraw=()=>{raf||(raf=requestAnimationFrame(()=>{raf=0;draw()}))};
 function size(){const r=$("cv").getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height-BH;cv.width=W*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);redraw()}
