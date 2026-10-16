@@ -243,8 +243,15 @@ async function api(p){
   if(!r.ok)throw new Error("HTTP "+r.status);return r.json();
 }
 const bq=(since,until)=>`/api/bars?symbol=${encodeURIComponent(sym)}&since=${since}`+(until?`&until=${until}`:"");
-// Tải gia tăng: chỉ hỏi nến từ nến cuối web đang có (lùi 10 phút cho chắc), nên mỗi lần chỉ vài nến thay vì cả 4 ngày.
-// Cứ 10 phút lại tải đầy đủ 4 ngày một lần để vá các nến EA gửi bù muộn. Không dùng localStorage/IndexedDB.
+// Tải gia tăng: chỉ hỏi nến từ nến cuối web đang có (lùi 10 phút cho chắc), nên mỗi lần chỉ vài nến thay vì cả DAYS ngày.
+// Cứ 10 phút lại tải đầy đủ DAYS ngày một lần để vá các nến EA gửi bù muộn. Không dùng localStorage/IndexedDB.
+// Số ngày hiển thị: đổi DAYS ở đây (nhớ để EA có InpBarDays >= DAYS). Tải chia từng cửa sổ 5 ngày để API không bị cắt ở LIMIT 10000 nến.
+const DAYS=14;
+async function fetchBars(since,now){
+  const out=[];
+  for(let s=since;s<=now;s+=432000){const r=await api(bq(s,s+432000));for(const b of r.bars)out.push(b)}
+  return out;
+}
 let lastFull=0;
 function lastBarT(){
   const ds=dayList();
@@ -253,12 +260,12 @@ function lastBarT(){
 }
 async function loadBars(){
   const now=srv||Math.floor(Date.now()/1000);
-  const floor=(Math.floor(now/86400)-4)*86400,last=lastBarT();
+  const floor=(Math.floor(now/86400)-(DAYS-1))*86400,last=lastBarT();
   const full=!last||Date.now()-lastFull>600000;
   const since=full?floor:Math.max(floor,last-600);
-  const r=await api(bq(since));
+  const bars=await fetchBars(since,now+86400);
   if(full)lastFull=Date.now();
-  ingest(r.bars);redraw();
+  ingest(bars);redraw();
 }
 async function loadOlder(){
   const ds=dayList();if(!ds.length)return;
